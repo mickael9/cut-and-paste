@@ -406,6 +406,7 @@ function on_tick(event)
         local player = game.players[player_index]
         local data = player_data(player)
         local selection = data.selection
+        local reconnect_replaced = {}
 
         if selection and (not player.cursor_stack.valid_for_read
                           or player.cursor_stack.name ~= selection.paste_tool) then
@@ -506,6 +507,16 @@ function on_tick(event)
 
                             if replace_mode ~= mod.setting_values.replace_mode.never then
                                 if replace_mode == mod.setting_values.replace_mode.always or not compatible then
+                                    local defs = coll_entity.circuit_connection_definitions
+
+                                    if compatible and defs and #defs > 0 then
+                                        reconnect_replaced[coll_entity.unit_number] = {
+                                            name = real_coll_entity.name,
+                                            position = real_coll_entity.position,
+                                            definitions = defs,
+                                        }
+                                    end
+
                                     coll_entity.order_deconstruction(player.force)
                                     script.raise_event(defines.events.on_marked_for_deconstruction, {
                                         player_index = player.index,
@@ -539,6 +550,16 @@ function on_tick(event)
             end
 
             local reconnect_wires = get_setting(player, mod.setting_names.reconnect_wires)
+
+            for _, replacement in pairs(reconnect_replaced) do
+                local entity = player.surface.find_entity('entity-ghost', replacement.position)
+                if entity and entity.ghost_name == replacement.name then
+                    for _, def in pairs(replacement.definitions) do
+                        entity.connect_neighbour(def)
+                    end
+                end
+            end
+
             if selection.cut and reconnect_wires then
                 if #blueprint.entities > 0 then
                     for _, reconnect in pairs(source.reconnect) do

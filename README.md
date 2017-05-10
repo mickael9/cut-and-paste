@@ -36,7 +36,9 @@ This behavior can be changed using the "Replace mode" setting:
    have different type, position or direction (the default).
 
  - *Always*: conflicting destination entities will always be replaced, even if
-   they match exactly. This will break existing circuit connections.
+   they match exactly. Existing circuit connections will be kept if the
+   destination is of the same type, position and direction, otherwise they'll
+   be destroyed.
 
  - *Never*: conflicting destination entities will not be replaced. This
    matches the game behavior when placing a blueprint.
