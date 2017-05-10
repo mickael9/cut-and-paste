@@ -359,6 +359,7 @@ script.on_event(defines.events.on_put_item, function(event)
 
     printf("here we go")
     selection.state = item_state.placing
+    global.on_tick_registered = true
     script.on_event(defines.events.on_tick, on_tick)
 end)
 
@@ -579,6 +580,7 @@ function on_tick(event)
         end
     end
     script.on_event(defines.events.on_tick, nil)
+    global.on_tick_registered = false
 end
 
 
@@ -608,3 +610,9 @@ do
 
     end)
 end
+
+script.on_load(function()
+    if global.on_tick_registered then
+        script.on_event(defines.events.on_tick, on_tick)
+    end
+end)
