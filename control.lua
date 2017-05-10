@@ -208,7 +208,7 @@ script.on_event(defines.events.on_player_cursor_stack_changed, function(event)
 
     local player = game.players[event.player_index]
     local item = player.cursor_stack
-    local data = global.data[player.index]
+    local data = player_data(player)
     local reuse_copy_bp = get_setting(player, mod.setting_names.reuse_copy_blueprint)
 
 
@@ -403,7 +403,7 @@ function on_tick(event)
 
     for player_index, data in ipairs(global.data) do
         local player = game.players[player_index]
-        local data = global.data[player_index]
+        local data = player_data(player)
         local selection = data.selection
 
         if selection and (not player.cursor_stack.valid_for_read
