@@ -53,8 +53,19 @@ function add_points(...)
     return res
 end
 
+function sub_points(point, sub)
+    return {
+        x = point.x - sub.x,
+        y = point.y - sub.y
+    }
+end
+
 function negate_point(point)
     return { x = -point.x, y = -point.y }
+end
+
+function point_equals(p1, p2)
+    return p1.x == p2.x and p1.y == p2.y
 end
 
 function player_data(player)
@@ -152,10 +163,7 @@ function on_selected_area(event)
                 local pos_src = match.position
                 local pos_bp = ref_bp.position
 
-                center_pos = {
-                    x = pos_src.x - pos_bp.x,
-                    y = pos_src.y - pos_bp.y,
-                }
+                center_pos = sub_points(pos_src, pos_bp)
                 printf("found bp center pos: %s", center_pos)
                 break
             end
@@ -424,10 +432,7 @@ function on_tick(event)
             if #blueprint.entities > 0 then
                 printf("placeholders: %s", selection.placeholders)
 
-                local rotation = {
-                    x = placeholders.top_pos.x - placeholders.center_pos.x,
-                    y = placeholders.top_pos.y - placeholders.center_pos.y
-                }
+                local rotation = sub_points(placeholders.top_pos, placeholders.center_pos)
 
                 -- Now we place the original blueprint
                 local direction_map = {
@@ -496,7 +501,7 @@ function on_tick(event)
                         if not real_coll_entity.prototype.has_flag('not-on-map') then
                             local same_name = real_coll_entity.name == bp_entity.name
                             local same_dir = dest_dir == (coll_entity.direction or defines.direction.north)
-                            local same_pos = coll_center.x == coll_entity.position.x and coll_center.y == coll_entity.position.y
+                            local same_pos = point_equals(coll_center, coll_entity.position)
                             local compatible = same_name and same_dir and same_pos
                             local replace_mode = get_setting(player, mod.setting_names.replace_mode)
 
