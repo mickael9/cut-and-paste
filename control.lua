@@ -305,7 +305,7 @@ script.on_event(defines.events.on_put_item, function(event)
     -- Deconstruct the source entities and tiles  if the cut tool was used
     if selection.cut then
         for _, entity in pairs(selection.source.entities) do
-            if entity.order_deconstruction(player.force) then
+            if entity.valid and entity.order_deconstruction(player.force) then
                 -- notify other mods such as creative mode or instant blueprint
                 script.raise_event(defines.events.on_marked_for_deconstruction, {
                     player_index = player.index,
