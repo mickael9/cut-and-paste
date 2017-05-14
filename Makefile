@@ -9,7 +9,7 @@ FILES=$(wildcard README.md LICENSE info.json *.lua */)
 all: $(ZIP)
 
 $(ZIP): $(FILES)
-	@bsdtar -acf $@ -s'@^@$(NAME_VER)/@' $^
+	@git archive --format=zip --prefix=$(NAME_VER)/ -o $@ HEAD $^
 
 install: $(ZIP)
 	@cp $(ZIP) ~/.factorio/mods
@@ -18,7 +18,7 @@ link:
 	@ln -sf  $(CURDIR) ~/.factorio/mods/$(NAME_VER)
 
 clean:
-	@rm -f $(ZIP)
+	@rm -f $(NAME)_*.zip
 
 .PHONY: all clean install link
 .PHONY: $(ZIP) # always rebuild
