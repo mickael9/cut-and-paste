@@ -150,10 +150,18 @@ function on_selected_area(event)
     if #blueprint_entities > 0 then
         local ref_bp = blueprint_entities[1]
 
-        entities = player.surface.find_entities_filtered{
-            area = area,
-            force = player.force,
-        }
+        if not point_equals(area.left_top, area.right_bottom) then
+            entities = player.surface.find_entities_filtered{
+                area = area,
+                force = player.force,
+            }
+        else
+            entities = player.surface.find_entities_filtered{
+                position = area.left_top,
+                force = player.force,
+            }
+        end
+
         sort_by_position(entities)
 
         for _, match in pairs(entities) do
@@ -196,7 +204,6 @@ function on_selected_area(event)
         tool = event.item,
         paste_tool = paste_tool,
         state = item_state.moving_to_hand,
-        area = area,
         source = {
             center_pos = center_pos,
             entities = entities,
