@@ -36,5 +36,6 @@ item_state = {
     moving_to_hand = 1,
     in_hand = 2,
     placing = 3,
+    placed = 4,
 }
 

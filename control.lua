@@ -387,6 +387,11 @@ script.on_event(defines.events.on_built_entity, function(event)
 
     printf("on_built_entity")
 
+    if not entity.valid then
+        printf("invalid entity in on_built_entity")
+        return
+    end
+
     if not selection or selection.state ~= item_state.placing then
         return
     end
@@ -435,6 +440,8 @@ function on_tick(event)
             local blueprint = selection.blueprint
             local placeholders = selection.placeholders
             local bp_direction
+
+            selection.state = item_state.placed
 
             if #blueprint.entities > 0 then
                 printf("placeholders: %s", selection.placeholders)
@@ -552,10 +559,14 @@ function on_tick(event)
                 }
 
                 for _, ghost in pairs(ghosts) do
-                    script.raise_event(defines.events.on_built_entity, {
-                        player_index = player.index,
-                        created_entity = ghost
-                    })
+                    if ghost.valid then
+                        script.raise_event(defines.events.on_built_entity, {
+                            player_index = player.index,
+                            created_entity = ghost
+                        })
+                    else
+                        printf("invalid ghost returned by build_blueprint?")
+                    end
                 end
 
                 printf("rebuilt blueprint")
