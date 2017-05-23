@@ -630,57 +630,60 @@ function on_tick(event)
                 end
             end
 
-            if selection.cut then
-                for _, src_ent in pairs(source and source.entities or {}) do
-                    -- Rotate the original source position
-                    local rotated = rotate_point(
-                        src_ent.position,
-                        source.center_pos,
-                        bp_direction
-                    )
+            for _, src_ent in pairs(source and source.entities or {}) do
+                -- Rotate the original source position
+                local rotated = rotate_point(
+                    src_ent.position,
+                    source.center_pos,
+                    bp_direction
+                )
 
-                    -- Translate to destination position
-                    local dest_pos = add_points(rotated, placeholders.center_pos, negate_point(source.center_pos))
-                    local dest_entity = player.surface.find_entity('entity-ghost', dest_pos)
+                -- Translate to destination position
+                local dest_pos = add_points(rotated, placeholders.center_pos, negate_point(source.center_pos))
+                local dest_entity = player.surface.find_entity('entity-ghost', dest_pos)
 
-                    if not dest_entity or dest_entity.ghost_name ~= src_ent.name then
-                        dest_entity = player.surface.find_entity(src_ent.name, dest_pos)
-                    end
+                if not dest_entity or dest_entity.ghost_name ~= src_ent.name then
+                    dest_entity = player.surface.find_entity(src_ent.name, dest_pos)
+                end
 
-                    local reconnect_wires = get_setting(player, mod.setting_names.reconnect_wires)
-                    if dest_entity and selection.cut and reconnect_wires then
-                        for _, def in pairs(src_ent.reconnect) do
-                            local target = def.target_entity
-                            if target.valid then
-                                dest_entity.connect_neighbour(def)
-                            end
-                        end
-                    end
-
-                    local move_items = get_setting(player, mod.setting_names.move_items)
-                    if dest_entity and move_items and src_ent.items then
-
-                        if dest_entity.type == 'entity-ghost' then
-                            dest_entity.item_requests = src_ent.items
-                            printf("set item requests: %s", items)
-                        else
-                            local proxy = player.surface.create_entity{
-                                name = 'item-request-proxy',
-                                force = player.force,
-                                position = dest_entity.position,
-                                target = dest_entity,
-                                modules = src_ent.items,
-                            }
-
-                            if raise_built_entity(proxy, player) then
-                                printf("created request proxy: %s %s", items, proxy.item_requests)
-                            else
-                                printf("failed to create request proxy")
-                            end
+                local reconnect_wires = get_setting(player, mod.setting_names.reconnect_wires)
+                if dest_entity and selection.cut and reconnect_wires then
+                    for _, def in pairs(src_ent.reconnect) do
+                        local target = def.target_entity
+                        if target.valid then
+                            dest_entity.connect_neighbour(def)
                         end
                     end
                 end
 
+                local copy_items = get_setting(player, mod.setting_names.copy_items)
+                copy_items = copy_items == mod.setting_values.copy_items.always or (
+                             copy_items == mod.setting_values.copy_items.move_only and selection.cut)
+
+                if dest_entity and copy_items and src_ent.items then
+
+                    if dest_entity.type == 'entity-ghost' then
+                        dest_entity.item_requests = src_ent.items
+                        printf("set item requests: %s", items)
+                    else
+                        local proxy = player.surface.create_entity{
+                            name = 'item-request-proxy',
+                            force = player.force,
+                            position = dest_entity.position,
+                            target = dest_entity,
+                            modules = src_ent.items,
+                        }
+
+                        if raise_built_entity(proxy, player) then
+                            printf("created request proxy: %s %s", items, proxy.item_requests)
+                        else
+                            printf("failed to create request proxy")
+                        end
+                    end
+                end
+            end
+
+            if selection.cut then
                 player.cursor_stack.set_stack{name = selection.tool}
                 data.selection = nil
                 printf("cut finished")

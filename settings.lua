@@ -14,10 +14,15 @@ data:extend{
 		order = "a",
 	},
 	{
-		type = "bool-setting",
-		name = mod.setting_names.move_items,
+		type = "string-setting",
+		name = mod.setting_names.copy_items,
 		setting_type = "runtime-per-user",
-		default_value = true,
+		default_value = mod.setting_values.copy_items.move_only,
+		allowed_values = {
+			mod.setting_values.copy_items.move_only,
+			mod.setting_values.copy_items.always,
+			mod.setting_values.copy_items.never,
+		},
 		order = "b",
 	},
 	{

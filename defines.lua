@@ -23,14 +23,19 @@ mod.setting_names = {
     reuse_copy_blueprint = mod.prefix .. 'reuse-copy-blueprint',
     reconnect_wires      = mod.prefix .. 'reconnect-wires',
     keep_tiles           = mod.prefix .. 'keep-tiles',
-    move_items           = mod.prefix .. 'move-items',
+    copy_items           = mod.prefix .. 'copy-items',
 }
 mod.setting_values = {
     replace_mode = {
         when_different = 'When different',
         always = 'Always',
         never = 'Never',
-    }
+    },
+    copy_items = {
+        move_only = 'Move only',
+        always = 'Always',
+        never = 'Never',
+    },
 }
 
 item_state = {

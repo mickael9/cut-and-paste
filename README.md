@@ -16,6 +16,9 @@ By default, the Cut tool will try to maintain circuit connections with items
 outside the selected area if the destination isn't too far from the source.
 You can disable this in the mod setting (Esc, Options, Mods, Per player).
 
+Items in containers (chests contents, turret ammo, etc.) will be moved to the
+destination as well. This can be disabled in the mod settings.
+
 Tiles (such as concrete) can be included by using the Alternative selection
 mode (usually by holding Shift when selecting).
 
@@ -45,10 +48,11 @@ This behavior can be changed using the "Replace mode" setting:
 
 ## Copy tool
 
-The copy tool is similar to the Cut tool except it doesn't deconstruct the
-source entities or reconnect circuit wires.
+The Copy tool is similar to the Cut tool except it doesn't deconstruct the
+source entities or reconnect circuit wires. It doesn't copy items in containers
+(except modules).
 
-It exhibits the same replacing behavior as the Cut tool.
+Conflicting items are handled in the same way as the Cut tool.
 
 Another minor difference is that the selection remains in hand after being
 placed, allowing more copies to be made. The selection is cleared as soon as it
