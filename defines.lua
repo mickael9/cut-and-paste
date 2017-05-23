@@ -23,6 +23,7 @@ mod.setting_names = {
     reuse_copy_blueprint = mod.prefix .. 'reuse-copy-blueprint',
     reconnect_wires      = mod.prefix .. 'reconnect-wires',
     keep_tiles           = mod.prefix .. 'keep-tiles',
+    move_items           = mod.prefix .. 'move-items',
 }
 mod.setting_values = {
     replace_mode = {
@@ -39,3 +40,10 @@ item_state = {
     placed = 4,
 }
 
+inventory_blacklists = {
+    ['furnace']            = { [defines.inventory.furnace_result] = true },
+    ['assembling-machine'] = { [defines.inventory.assembling_machine_output] = true },
+    ['rocket-silo']        = { [defines.inventory.rocket_silo_result] = true },
+
+    -- FIXME burnt_result: which entities have it?
+}

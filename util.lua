@@ -5,6 +5,10 @@ function dump(obj)
 end
 
 function dump_entity(ent)
+    if not ent or not ent.valid then
+        return "[invalid entity]"
+    end
+
     local type = ent.type
     local name = ent.name
     if type == 'entity-ghost' or type == 'tile-ghost' then

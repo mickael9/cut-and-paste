@@ -2,12 +2,17 @@ require('util')
 require('defines')
 
 function unwrap_ghost(ent)
+    if not ent or not ent.valid then
+        return { valid = false }
+    end
+
     res = {
         name = ent.name,
         type = ent.type,
         prototype = ent.prototype,
         position = ent.position,
         direction = ent.direction,
+        valid = true,
     }
     if ent.type == 'entity-ghost' then
         res.name = ent.ghost_name
@@ -91,6 +96,28 @@ function sort_by_position(list)
     end)
 end
 
+function deconstruct_entity(entity, player)
+    if entity and entity.valid and entity.order_deconstruction(player.force) then
+        script.raise_event(defines.events.on_marked_for_deconstruction, {
+            player_index = player.index,
+            entity = entity,
+            mod = mod.name,
+        })
+        return true
+    end
+end
+
+function raise_built_entity(entity, player)
+    if entity and entity.valid then
+        script.raise_event(defines.events.on_built_entity, {
+            player_index = player.index,
+            created_entity = entity,
+            mod = mod.name,
+        })
+        return true
+    end
+end
+
 function init()
     global.data = global.data or {}
 end
@@ -109,7 +136,7 @@ function on_selected_area(event)
     local data = player_data(player)
     local always_include_tiles = (event.name == defines.events.on_player_alt_selected_area)
     local center_pos
-    local reconnect = {}
+    local saved_entities = {}
     local entities = {}
     local cut = event.item == mod.tools.cut
     local paste_tool
@@ -180,8 +207,51 @@ function on_selected_area(event)
         -- We copy relevant info from the source entities since those may not be valid
         -- anymore when we need them later
         for _, entity in pairs(entities) do
-            reconnect[entity.unit_number] = unwrap_ghost(entity)
-            reconnect[entity.unit_number].reconnect = {}
+            local saved = unwrap_ghost(entity)
+            saved.reconnect = {}
+            saved.original = entity
+
+            local items = {}
+            local blacklisted = false
+
+            if entity.type == 'entity-ghost' then
+                items = entity.item_requests or {}
+            end
+
+            if saved.type == 'logistic-container' then
+                if saved.prototype.logistic_mode ~= 'storage' then
+                    blacklisted = true
+                end
+            end
+
+            if not blacklisted and entity.has_items_inside() then
+                local blacklist = inventory_blacklists[saved.type] or {}
+
+                for i = 1, 8 do
+                    local inv = entity.get_inventory(i)
+
+                    if inv and not blacklist[i] then
+                        for j = 1, #inv do
+                            local stack = inv[j]
+                            if stack.valid_for_read then
+                                items[stack.name] = (items[stack.name] or 0) + stack.count
+                            end
+                        end
+                    end
+                end
+            end
+
+            local has_items = false
+            for _, _ in pairs(items) do
+                has_items = true
+                break
+            end
+
+            if has_items then
+                saved.items = items
+            end
+
+            saved_entities[entity.unit_number] = saved
         end
 
         -- Also copy all circuit connections external to the blueprint
@@ -190,13 +260,13 @@ function on_selected_area(event)
 
             for _, def in pairs(defs) do
                 local target_entity = def.target_entity
-                if reconnect[target_entity.unit_number] == nil then
-                    table.insert(reconnect[entity.unit_number].reconnect, def)
+                if saved_entities[target_entity.unit_number] == nil then
+                    table.insert(saved_entities[entity.unit_number].reconnect, def)
                 end
             end
         end
 
-        printf("#reconnect: %s", #reconnect)
+        printf("#saved_entities: %s", #saved_entities)
     end
 
     data.selection = {
@@ -206,8 +276,7 @@ function on_selected_area(event)
         state = item_state.moving_to_hand,
         source = {
             center_pos = center_pos,
-            entities = entities,
-            reconnect = reconnect or {},
+            entities = saved_entities,
             tiles = #blueprint_tiles > 0 and event.tiles or {},
         },
         blueprint = { tiles = blueprint_tiles, entities = blueprint_entities },
@@ -225,7 +294,6 @@ script.on_event(defines.events.on_player_cursor_stack_changed, function(event)
     local item = player.cursor_stack
     local data = player_data(player)
     local reuse_copy_bp = get_setting(player, mod.setting_names.reuse_copy_blueprint)
-
 
     if data.selection and data.selection.state ~= item_state.moving_to_hand then
         data.selection = nil
@@ -320,13 +388,7 @@ script.on_event(defines.events.on_put_item, function(event)
     -- Deconstruct the source entities and tiles  if the cut tool was used
     if selection.cut then
         for _, entity in pairs(selection.source.entities) do
-            if entity.valid and entity.order_deconstruction(player.force) then
-                -- notify other mods such as creative mode or instant blueprint
-                script.raise_event(defines.events.on_marked_for_deconstruction, {
-                    player_index = player.index,
-                    entity = entity
-                })
-            end
+            deconstruct_entity(entity.original, player)
         end
 
         local keep_tiles = get_setting(player, mod.setting_names.keep_tiles)
@@ -337,11 +399,7 @@ script.on_event(defines.events.on_put_item, function(event)
                     position = tile.position,
                     force = player.force,
                 }
-                -- notify other mods such as creative mode or instant blueprint
-                script.raise_event(defines.events.on_marked_for_deconstruction, {
-                    player_index = player.index,
-                    entity = entity
-                })
+                deconstruct_entity(entity, player)
             end
         end
     end
@@ -536,11 +594,7 @@ function on_tick(event)
                                         }
                                     end
 
-                                    coll_entity.order_deconstruction(player.force)
-                                    script.raise_event(defines.events.on_marked_for_deconstruction, {
-                                        player_index = player.index,
-                                        entity = coll_entity
-                                    })
+                                    deconstruct_entity(coll_entity, player)
                                 end
                             end
                         end
@@ -559,20 +613,13 @@ function on_tick(event)
                 }
 
                 for _, ghost in pairs(ghosts) do
-                    if ghost.valid then
-                        script.raise_event(defines.events.on_built_entity, {
-                            player_index = player.index,
-                            created_entity = ghost
-                        })
-                    else
+                    if not raise_built_entity(ghost, player) then
                         printf("invalid ghost returned by build_blueprint?")
                     end
                 end
 
                 printf("rebuilt blueprint")
             end
-
-            local reconnect_wires = get_setting(player, mod.setting_names.reconnect_wires)
 
             for _, replacement in pairs(reconnect_replaced) do
                 local entity = player.surface.find_entity('entity-ghost', replacement.position)
@@ -583,30 +630,52 @@ function on_tick(event)
                 end
             end
 
-            if selection.cut and reconnect_wires then
-                if #blueprint.entities > 0 then
-                    for _, reconnect in pairs(source.reconnect) do
-                        -- Rotate the original source position
-                        local rotated = rotate_point(
-                            reconnect.position,
-                            source.center_pos,
-                            bp_direction
-                        )
+            if selection.cut then
+                for _, src_ent in pairs(source and source.entities or {}) do
+                    -- Rotate the original source position
+                    local rotated = rotate_point(
+                        src_ent.position,
+                        source.center_pos,
+                        bp_direction
+                    )
 
-                        -- Translate to destination position
-                        local dest_pos = add_points(rotated, placeholders.center_pos, negate_point(source.center_pos))
-                        local entity = player.surface.find_entity('entity-ghost', dest_pos)
+                    -- Translate to destination position
+                    local dest_pos = add_points(rotated, placeholders.center_pos, negate_point(source.center_pos))
+                    local dest_entity = player.surface.find_entity('entity-ghost', dest_pos)
 
-                        if not entity then
-                            entity = player.surface.find_entity(reconnect.name, dest_pos)
+                    if not dest_entity or dest_entity.ghost_name ~= src_ent.name then
+                        dest_entity = player.surface.find_entity(src_ent.name, dest_pos)
+                    end
+
+                    local reconnect_wires = get_setting(player, mod.setting_names.reconnect_wires)
+                    if dest_entity and selection.cut and reconnect_wires then
+                        for _, def in pairs(src_ent.reconnect) do
+                            local target = def.target_entity
+                            if target.valid then
+                                dest_entity.connect_neighbour(def)
+                            end
                         end
+                    end
 
-                        if entity then
-                            for _, def in pairs(reconnect.reconnect) do
-                                local target = def.target_entity
-                                if target.valid then
-                                    entity.connect_neighbour(def)
-                                end
+                    local move_items = get_setting(player, mod.setting_names.move_items)
+                    if dest_entity and move_items and src_ent.items then
+
+                        if dest_entity.type == 'entity-ghost' then
+                            dest_entity.item_requests = src_ent.items
+                            printf("set item requests: %s", items)
+                        else
+                            local proxy = player.surface.create_entity{
+                                name = 'item-request-proxy',
+                                force = player.force,
+                                position = dest_entity.position,
+                                target = dest_entity,
+                                modules = src_ent.items,
+                            }
+
+                            if raise_built_entity(proxy, player) then
+                                printf("created request proxy: %s %s", items, proxy.item_requests)
+                            else
+                                printf("failed to create request proxy")
                             end
                         end
                     end
