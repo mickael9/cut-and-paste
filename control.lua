@@ -12,6 +12,8 @@ function unwrap_ghost(ent)
         prototype = ent.prototype,
         position = ent.position,
         direction = ent.direction,
+        original = ent,
+        unit_number = ent.unit_number,
         valid = true,
     }
     if ent.type == 'entity-ghost' then
@@ -42,11 +44,56 @@ function rotate_point(point, center, direction)
         [defines.direction.east]  = { 0, -1,  1,  0},
         [defines.direction.south] = {-1,  0,  0, -1},
     }
-    local m = matrices[direction]
+    local m = matrices[(direction or defines.direction.north) % 8]
     local mx = m[1] * tx + m[2] * ty
     local my = m[3] * tx + m[4] * ty
 
     return {x = mx + cx, y = my + cy}
+end
+
+
+function map_point(src_point, src_origin, src_direction,
+                   dst_origin, rotation)
+
+    local src_direction = (src_direction or defines.direction.north) % 8
+    local rotation = (rotation or 0) % 8
+    local dst_direction = (src_direction + rotation) % 8
+    local dst_point
+
+    dst_point = rotate_point(src_point, src_origin, rotation)
+    dst_point = add_points(dst_point, dst_origin, negate_point(src_origin))
+
+    return dst_point, dst_direction
+end
+
+function find_entity_or_ghost_at(surface, name, position)
+    local entity = surface.find_entity('entity-ghost', position)
+
+    if not entity or entity.ghost_name ~= name then
+        entity = surface.find_entity(name, position)
+    end
+
+    return entity
+end
+
+function find_collisions(surface, area)
+    local entities = surface.find_entities_filtered{
+        surface = surface,
+        area = area,
+    }
+    local collisions = {}
+
+    for _, entity in pairs(entities or {}) do
+        local unwrapped = unwrap_ghost(entity)
+        local ignored = unwrapped.prototype.has_flag('not-on-map')
+                        or entity.to_be_deconstructed(entity.force)
+
+        if not ignored then
+            table.insert(collisions, entity)
+        end
+    end
+
+    return collisions
 end
 
 function add_points(...)
@@ -97,14 +144,27 @@ function sort_by_position(list)
 end
 
 function deconstruct_entity(entity, player)
-    if entity and entity.valid and entity.order_deconstruction(player.force) then
+    local result
+
+    if not entity or not entity.valid then
+        return false
+    end
+
+    if entity.to_be_deconstructed(player.force) then
+        result = true
+    else
+        result = entity.order_deconstruction(player.force)
+    end
+
+    if result then
         script.raise_event(defines.events.on_marked_for_deconstruction, {
             player_index = player.index,
             entity = entity,
             mod = mod.name,
         })
-        return true
     end
+
+    return result
 end
 
 function raise_built_entity(entity, player)
@@ -209,7 +269,6 @@ function on_selected_area(event)
         for _, entity in pairs(entities) do
             local saved = unwrap_ghost(entity)
             saved.reconnect = {}
-            saved.original = entity
 
             local items = {}
             local blacklisted = false
@@ -385,25 +444,6 @@ script.on_event(defines.events.on_put_item, function(event)
 
     local selection = data.selection
 
-    -- Deconstruct the source entities and tiles  if the cut tool was used
-    if selection.cut then
-        for _, entity in pairs(selection.source.entities) do
-            deconstruct_entity(entity.original, player)
-        end
-
-        local keep_tiles = get_setting(player, mod.setting_names.keep_tiles)
-        if not keep_tiles then
-            for _, tile in pairs(selection.source.tiles) do
-                entity = player.surface.create_entity{
-                    name = 'deconstructible-tile-proxy',
-                    position = tile.position,
-                    force = player.force,
-                }
-                deconstruct_entity(entity, player)
-            end
-        end
-    end
-
     if #selection.blueprint.entities > 0 then
         -- Replace the blueprint being placed with a new one
         -- containing only two dummy tiles at (0, 0) and (0, -1)
@@ -497,9 +537,28 @@ function on_tick(event)
             local source = selection.source
             local blueprint = selection.blueprint
             local placeholders = selection.placeholders
-            local bp_direction
+            local bp_rotation
 
             selection.state = item_state.placed
+
+            -- Deconstruct the source entities and tiles  if the cut tool was used
+            if selection.cut then
+                for _, entity in pairs(selection.source.entities) do
+                    deconstruct_entity(entity.original, player)
+                end
+
+                local keep_tiles = get_setting(player, mod.setting_names.keep_tiles)
+                if not keep_tiles then
+                    for _, tile in pairs(selection.source.tiles) do
+                        entity = player.surface.create_entity{
+                            name = 'deconstructible-tile-proxy',
+                            position = tile.position,
+                            force = player.force,
+                        }
+                        deconstruct_entity(entity, player)
+                    end
+                end
+            end
 
             if #blueprint.entities > 0 then
                 printf("placeholders: %s", selection.placeholders)
@@ -514,43 +573,39 @@ function on_tick(event)
                     ["0 1"]  = defines.direction.south,
                 }
                 local tag = string.format("%d %d", rotation.x, rotation.y)
-                bp_direction = direction_map[tag]
+                bp_rotation = direction_map[tag]
 
-                printf("blueprint direction: %s", bp_direction)
+                printf("blueprint rotation: %s", bp_rotation)
 
                 -- Use blueprint entities to find out if there are colliding entities
                 -- at destination, then order their deconstruction
 
                 for _, bp_entity in pairs(blueprint.entities) do
-                    -- Determine the collision box of the destination entity
-                    -- in the original blueprint direction
-                    local bp_entity_dir = bp_entity.direction or defines.direction.north
-                    local dest_dir = (bp_direction + bp_entity_dir) % 8
+                    -- Determine the collision area at the destination
+                    local zero = { x = 0, y = 0 }
                     local coll_area = game.entity_prototypes[bp_entity.name].collision_box
+                    local bp_ent_direction = bp_entity.direction or defines.direction.north
+                    local dest_pos, dest_dir = map_point(bp_entity.position, zero, bp_ent_direction,
+                                                         placeholders.center_pos, bp_rotation)
 
                     printf("bp_entity: %s", bp_entity)
-
-                    -- Also track the entity's position along with its bounding box
-                    coll_area.center = { x = 0, y = 0 }
 
                     printf("area: %s", coll_area)
 
                     for edge, point in pairs(coll_area) do
                         -- Apply original entity direction from blueprint
-                        point = rotate_point(point, { x = 0, y = 0 }, bp_entity_dir)
+                        point = rotate_point(point, zero, bp_ent_direction)
 
-                        -- Translate the area to the destination point
-                        point = add_points(point, bp_entity.position, placeholders.center_pos)
+                        -- Translate the box to the entity's center
+                        point = add_points(point, bp_entity.position)
 
-                        -- Apply the global blueprint rotation
-                        point = rotate_point(point, placeholders.center_pos, bp_direction)
+                        -- Map it to destination coordinates
+                        point = map_point(point, zero, bp_ent_direction,
+                                          placeholders.center_pos, bp_rotation)
 
                         coll_area[edge] = point
 
                     end
-
-                    local coll_center = coll_area.center
-                    coll_area.center = nil
 
                     -- Make sure the area edges are actually "left top" and "right bottom"
                     -- since we may have rotated the area
@@ -560,54 +615,67 @@ function on_tick(event)
                         end
                     end
 
-                    local coll_entities = player.surface.find_entities_filtered{
-                        surface = player.surface,
-                        force = player.force,
-                        area = coll_area,
-                    }
+                    local coll_entities = find_collisions(player.surface, coll_area)
+
                     printf("#coll_entities: %d", #coll_entities)
 
+                    local src_pos, src_entity
+
+                    if source then
+                        src_pos = map_point(bp_entity.position, zero, bp_ent_direction,
+                                            source.center_pos, -bp_rotation)
+                        src_entity = find_entity_or_ghost_at(player.surface, bp_entity.name, src_pos)
+                    end
+
                     for _, coll_entity in pairs(coll_entities) do
-                        local real_coll_entity = unwrap_ghost(coll_entity)
+                        coll_entity = unwrap_ghost(coll_entity)
 
-                        if not real_coll_entity.prototype.has_flag('not-on-map') then
-                            local same_name = real_coll_entity.name == bp_entity.name
-                            local same_dir = dest_dir == (coll_entity.direction or defines.direction.north)
-                            local same_pos = point_equals(coll_center, coll_entity.position)
-                            local compatible = same_name and same_dir and same_pos
-                            local replace_mode = get_setting(player, mod.setting_names.replace_mode)
+                        local replace_mode = get_setting(player, mod.setting_names.replace_mode)
+                        local same_name = coll_entity.name == bp_entity.name
+                        local same_pos = point_equals(dest_pos, coll_entity.position)
 
-                            --printf("collision: from %s", dump_entity(bp_entity))
-                            --printf("collision: to %s", dump_entity(coll_entity))
-                            printf("replace mode: %s, actual dir: %s, compat: %s", replace_mode, actual_direction, compatible)
-                            printf("same name: %s, pos: %s, dir: %s", same_name, same_pos, same_dir)
+                        -- can we modify this entity so it matches the source one?
+                        local inplace = same_name and same_pos and src_entity and src_entity.name == bp_entity.name
+                        inplace = inplace and replace_mode == mod.setting_values.replace_mode.when_different
 
-                            if replace_mode ~= mod.setting_values.replace_mode.never then
-                                if replace_mode == mod.setting_values.replace_mode.always or not compatible then
-                                    local defs = coll_entity.circuit_connection_definitions
-
-                                    if compatible and defs and #defs > 0 then
-                                        reconnect_replaced[coll_entity.unit_number] = {
-                                            name = real_coll_entity.name,
-                                            position = real_coll_entity.position,
-                                            definitions = defs,
-                                        }
-                                    end
-
-                                    deconstruct_entity(coll_entity, player)
-                                end
+                        if inplace then
+                            local same_dir = coll_entity.direction == src_entity.direction or not src_entity.supports_direction
+                            -- if the only entity in the destination area is the one we want, and it has the same position then
+                            -- rotating it will make it fit exactly without any other conflicts
+                            if same_dir or #coll_entities == 1 then
+                                coll_entity.original.copy_settings(src_entity)
+                                coll_entity.original.direction = dest_dir
+                            else
+                                inplace = false
                             end
+                        end
+
+                        local replace = replace_mode == mod.setting_values.replace_mode.always or (
+                                        replace_mode == mod.setting_values.replace_mode.when_different and not inplace)
+
+                        if replace then
+                            local defs = coll_entity.original.circuit_connection_definitions
+
+                            if same_name and same_pos and defs and #defs > 0 then
+                                reconnect_replaced[coll_entity.unit_number] = {
+                                    name = coll_entity.name,
+                                    position = coll_entity.position,
+                                    definitions = defs,
+                                }
+                            end
+
+                            deconstruct_entity(coll_entity.original, player)
                         end
                     end
                 end
 
-                -- Reset the blueprint
+                -- Place the real blueprint
                 player.cursor_stack.set_blueprint_entities(selection.blueprint.entities)
                 player.cursor_stack.set_blueprint_tiles(selection.blueprint.tiles)
                 local ghosts = player.cursor_stack.build_blueprint{
                     force = player.force,
                     surface = player.surface,
-                    direction = bp_direction,
+                    direction = bp_rotation,
                     position = selection.placeholders.center_pos,
                     force_build = true, -- This won't cause any harm because we never get here if there was a conflict unless the player forced it with shift
                 }
@@ -631,20 +699,15 @@ function on_tick(event)
             end
 
             for _, src_ent in pairs(source and source.entities or {}) do
-                -- Rotate the original source position
-                local rotated = rotate_point(
+                local dest_pos = map_point(
                     src_ent.position,
                     source.center_pos,
-                    bp_direction
+                    src_ent.direction,
+                    placeholders.center_pos,
+                    bp_rotation
                 )
 
-                -- Translate to destination position
-                local dest_pos = add_points(rotated, placeholders.center_pos, negate_point(source.center_pos))
-                local dest_entity = player.surface.find_entity('entity-ghost', dest_pos)
-
-                if not dest_entity or dest_entity.ghost_name ~= src_ent.name then
-                    dest_entity = player.surface.find_entity(src_ent.name, dest_pos)
-                end
+                local dest_entity = find_entity_or_ghost_at(player.surface, src_ent.name, dest_pos)
 
                 local reconnect_wires = get_setting(player, mod.setting_names.reconnect_wires)
                 if dest_entity and selection.cut and reconnect_wires then

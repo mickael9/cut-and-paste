@@ -15,7 +15,7 @@ install: $(ZIP)
 	@cp $(ZIP) ~/.factorio/mods
 
 link:
-	@ln -sf  $(CURDIR) ~/.factorio/mods/$(NAME_VER)
+	@ln -nsf  $(CURDIR) ~/.factorio/mods/$(NAME_VER)
 
 clean:
 	@rm -f $(NAME)_*.zip

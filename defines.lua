@@ -45,6 +45,7 @@ item_state = {
     placed = 4,
 }
 
+-- Those inventories will not be moved to the destination
 inventory_blacklists = {
     ['furnace']            = { [defines.inventory.furnace_result] = true },
     ['assembling-machine'] = { [defines.inventory.assembling_machine_output] = true },
