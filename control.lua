@@ -480,7 +480,7 @@ end)
 function on_tick(event)
     printf("on_tick")
 
-    for player_index, data in ipairs(global.data) do
+    for player_index, data in pairs(global.data) do
         local player = game.players[player_index]
         local data = player_data(player)
         local selection = data.selection
