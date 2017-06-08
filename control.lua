@@ -143,6 +143,14 @@ function sort_by_position(list)
     end)
 end
 
+-- Returns true if a table has any keys (not necessarily numeric)
+function has_keys(table)
+    for _, _ in pairs(table) do
+        return true
+    end
+    return false
+end
+
 function deconstruct_entity(entity, player)
     local result
 
@@ -251,16 +259,20 @@ function on_selected_area(event)
 
         sort_by_position(entities)
 
-        for _, match in pairs(entities) do
+        for index, match in pairs(entities) do
             match = unwrap_ghost(match)
+            -- Filter out entites that can't be in a blueprint
+            if match.prototype.has_flag('not-on-map') or not has_keys(match.prototype.items_to_place_this) then
+                entities[index] = nil
+            else
+                if match.name == ref_bp.name then
+                    local pos_src = match.position
+                    local pos_bp = ref_bp.position
 
-            if match.name == ref_bp.name then
-                local pos_src = match.position
-                local pos_bp = ref_bp.position
-
-                center_pos = sub_points(pos_src, pos_bp)
-                printf("found bp center pos: %s", center_pos)
-                break
+                    center_pos = sub_points(pos_src, pos_bp)
+                    printf("found bp center pos: %s", center_pos)
+                    break
+                end
             end
         end
 
@@ -300,13 +312,7 @@ function on_selected_area(event)
                 end
             end
 
-            local has_items = false
-            for _, _ in pairs(items) do
-                has_items = true
-                break
-            end
-
-            if has_items then
+            if has_keys(items) then
                 saved.items = items
             end
 
