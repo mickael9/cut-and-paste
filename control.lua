@@ -682,21 +682,34 @@ function on_tick(event)
                 printf("blueprint rotation: %s", bp_rotation)
 
                 -- Find the blueprint build grid shift: https://forums.factorio.com/viewtopic.php?f=25&t=48383
+                -- Also checks if the blueprint is constrained by a grid or not
                 local bp_grid_shift = 0
+                local off_grid = true
                 for _, bp_entity in pairs(blueprint.entities) do
                     local prototype = game.entity_prototypes[bp_entity.name]
                     local shift = prototype.building_grid_bit_shift
                     if shift > bp_grid_shift then
                         bp_grid_shift = shift
                     end
+                    if not prototype.has_flag('placeable-off-grid') then
+                        off_grid = false
+                    end
                 end
-                local shift_val = 2^bp_grid_shift
-                local shift_offset = shift_val / 2
-                local shift_pos = { x = shift_offset, y = shift_offset }
-                local place_pos = {
-                    x = math.floor(math.floor(blueprint.placed_at.x) / shift_val) * shift_val,
-                    y = math.floor(math.floor(blueprint.placed_at.y) / shift_val) * shift_val,
-                }
+
+                local shift_pos, place_pos
+
+                if off_grid then
+                    shift_pos = ZERO
+                    place_pos = blueprint.placed_at
+                else
+                    local shift_val = 2^bp_grid_shift
+                    local shift_offset = shift_val / 2
+                    shift_pos = { x = shift_offset, y = shift_offset }
+                    place_pos = {
+                        x = math.floor(math.floor(blueprint.placed_at.x) / shift_val) * shift_val,
+                        y = math.floor(math.floor(blueprint.placed_at.y) / shift_val) * shift_val,
+                    }
+                end
 
                 -- Use blueprint entities to find out if there are colliding entities
                 -- at destination, then order their deconstruction
@@ -711,17 +724,36 @@ function on_tick(event)
                     printf("bp_entity: %s", bp_entity)
 
                     local coll_entities = {}
-                    local can_place = player.surface.can_place_entity{
+                    local collides = not player.surface.can_place_entity{
                         name = bp_entity.name,
                         position = dest_pos,
                         direction = dest_dir,
                         force = player.force
                     }
-                    if not can_place then
-                        local coll_area = bounding_box(player.force, player.surface, bp_entity.name, dest_pos, dest_dir)
-                        if coll_area then
-                            coll_entities = find_collisions(player.surface, coll_area)
+
+                    local coll_area = bounding_box(player.force, player.surface, bp_entity.name, dest_pos, dest_dir)
+
+                    if coll_area then
+                        coll_entities = find_collisions(player.surface, coll_area)
+
+                        -- can_place_entity returns true if we collide only with ghosts
+                        -- but we want it to return false in that situation
+                        if #coll_entities > 0 then
+                            local all_ghosts = true
+                            for _, coll_entity in pairs(coll_entities) do
+                                if coll_entity.type ~= 'entity-ghost' then
+                                    all_ghosts = false
+                                    break
+                                end
+                            end
+                            if not collides and all_ghosts then
+                                collides = true
+                            end
                         end
+                    end
+
+                    if not collides then
+                        coll_entities = {}
                     end
 
                     printf("#coll_entities: %d", #coll_entities)
