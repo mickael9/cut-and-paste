@@ -1,6 +1,8 @@
 require('util')
 require('defines')
 
+local ZERO = { x = 0, y = 0 }
+
 function unwrap_ghost(ent)
     if not ent or not ent.valid then
         return { valid = false }
@@ -24,29 +26,29 @@ function unwrap_ghost(ent)
     return res
 end
 
+function can_be_part_of_blueprint(prototype)
+    if not prototype.has_flag('player-creation') or prototype.has_flag('not-blueprintable') then
+        return false
+    end
+
+    return has_keys(prototype.items_to_place_this)
+end
+
 -- Rotate a point
 --
 -- point: the point to rotate
--- direction: new direction (from north)
---     north: no rotation
---     east: rotate clockwise 90°
---     west: rotate counter-clockwise 90°
---     south: rotate 180°
+--
+-- angle: 0..1
 -- center: point at which the rotation is applied
 
-function rotate_point(point, center, direction)
+function rotate_point(point, center, angle)
     local cx, cy = center.x, center.y
     local x, y = point.x, point.y
     local tx, ty = x - cx, y - cy
-    local matrices = {
-        [defines.direction.north] = { 1,  0,  0,  1},
-        [defines.direction.west]  = { 0,  1, -1,  0},
-        [defines.direction.east]  = { 0, -1,  1,  0},
-        [defines.direction.south] = {-1,  0,  0, -1},
-    }
-    local m = matrices[(direction or defines.direction.north) % 8]
-    local mx = m[1] * tx + m[2] * ty
-    local my = m[3] * tx + m[4] * ty
+    angle = angle * 2 * math.pi
+
+    local mx = tx * math.cos(angle) - ty * math.sin(angle)
+    local my = tx * math.sin(angle) + ty * math.cos(angle)
 
     return {x = mx + cx, y = my + cy}
 end
@@ -60,7 +62,7 @@ function map_point(src_point, src_origin, src_direction,
     local dst_direction = (src_direction + rotation) % 8
     local dst_point
 
-    dst_point = rotate_point(src_point, src_origin, rotation)
+    dst_point = rotate_point(src_point, src_origin, rotation / 8)
     dst_point = add_points(dst_point, dst_origin, negate_point(src_origin))
 
     return dst_point, dst_direction
@@ -76,6 +78,100 @@ function find_entity_or_ghost_at(surface, name, position)
     return entity
 end
 
+-- Returns the four corners of an oriented bounding box and its center
+function obb_corners(bounding_box)
+    local center = {
+        x = (bounding_box.left_top.x + bounding_box.right_bottom.x) / 2,
+        y = (bounding_box.left_top.y + bounding_box.right_bottom.y) / 2,
+    }
+
+    local vertices = {
+        { x = bounding_box.left_top.x,     y = bounding_box.left_top.y },
+        { x = bounding_box.left_top.x,     y = bounding_box.right_bottom.y },
+        { x = bounding_box.right_bottom.x, y = bounding_box.left_top.y },
+        { x = bounding_box.right_bottom.x, y = bounding_box.right_bottom.y },
+    }
+
+    for edge, point in pairs(vertices) do
+        vertices[edge] = rotate_point(point, center, bounding_box.orientation or 0)
+    end
+
+    return vertices, center
+end
+
+-- Returns the bouding box of an entity when placed at that position and direction
+-- If the direction is not a multiple of 90° (like 45° rails), then we return
+-- a bigger straight bounding box that contains the other one
+function bounding_box(force, surface, name, position, direction)
+    direction = (direction or defines.direction.north) % 8
+
+    -- Just create a temporary ghost and read its bounding_box property
+    local ent = surface.create_entity{
+        name = 'entity-ghost',
+        inner_name = name,
+        position = position,
+        direction = direction,
+        force = force,
+    }
+
+    if not ent then
+        game.print(string.format("%s: %s: failed to compute bounding box", mod.name, name))
+        return
+    end
+
+    local area = ent.bounding_box
+    ent.destroy()
+
+    -- We also need to handle the case of oriented bounding boxes
+    -- in that case, we just create the axis-aligned bounding box
+    -- that contains the oriented bounding box
+
+    local vertices, center = obb_corners(area)
+
+    -- Curved rails have a second bounding box which isn't exposed (yet)
+    local prototype = game.entity_prototypes[name]
+
+    if prototype.type == 'curved-rail' then
+        local areas = {
+            [0] = { -245, -753, 87, 491, 0.91 },
+            [1] = { -87, -753, 245, 491, 0.09 },
+            [2] = { -35, -701, 297, 543, 0.16 },
+            [3] = { -35, -543, 297, 701, 0.34 },
+            [4] = { -87, -491, 245, 753, 0.41 },
+            [5] = { -245, -491, 87, 753, 0.59 },
+            [6] = { -297, -543, 35, 701, 0.66 },
+            [7] = { -297, -701, 35, 543, 0.84 },
+        }
+        local a = areas[direction]
+        local secondary_box = {
+            left_top     = add_points(position, { x = a[1] / 256, y = a[2] / 256 }),
+            right_bottom = add_points(position, { x = a[3] / 256, y = a[4] / 256 }),
+            orientation  = a[5]
+        }
+        local secondary_vertices = obb_corners(secondary_box)
+        for _, v in pairs(secondary_vertices) do
+            table.insert(vertices, v)
+        end
+    elseif not area.orientation or area.orientation == 0 then
+        return area
+    end
+
+    area = {
+        left_top     = add_points(center),
+        right_bottom = add_points(center),
+    }
+
+    -- Take the min/max of all the vertices to get the final collision box
+    for edge, point in pairs(vertices) do
+        area.left_top.x = math.min(area.left_top.x, point.x)
+        area.left_top.y = math.min(area.left_top.y, point.y)
+        area.right_bottom.x = math.max(area.right_bottom.x, point.x)
+        area.right_bottom.y = math.max(area.right_bottom.y, point.y)
+    end
+
+    return area
+end
+
 function find_collisions(surface, area)
     local entities = surface.find_entities_filtered{
         surface = surface,
@@ -84,11 +180,7 @@ function find_collisions(surface, area)
     local collisions = {}
 
     for _, entity in pairs(entities or {}) do
-        local unwrapped = unwrap_ghost(entity)
-        local ignored = unwrapped.prototype.has_flag('not-on-map')
-                        or entity.to_be_deconstructed(entity.force)
-
-        if not ignored then
+        if not entity.to_be_deconstructed(entity.force) then
             table.insert(collisions, entity)
         end
     end
@@ -242,6 +334,14 @@ function on_selected_area(event)
     printf("#bp entities: %s", #blueprint_entities)
     printf("#bp tiles: %s", #blueprint_tiles)
 
+    for index, tile in pairs(event.tiles) do
+        local prototype = game.tile_prototypes[tile.name]
+
+        if not prototype.can_be_part_of_blueprint then
+            event.tiles[index] = nil
+        end
+    end
+
     if #blueprint_entities > 0 then
         local ref_bp = blueprint_entities[1]
 
@@ -262,17 +362,15 @@ function on_selected_area(event)
         for index, match in pairs(entities) do
             match = unwrap_ghost(match)
             -- Filter out entites that can't be in a blueprint
-            if match.prototype.has_flag('not-on-map') or not has_keys(match.prototype.items_to_place_this) then
+            if not can_be_part_of_blueprint(match.prototype) then
                 entities[index] = nil
-            else
-                if match.name == ref_bp.name then
-                    local pos_src = match.position
-                    local pos_bp = ref_bp.position
+            elseif match.name == ref_bp.name then
+                local pos_src = match.position
+                local pos_bp = ref_bp.position
 
-                    center_pos = sub_points(pos_src, pos_bp)
-                    printf("found bp center pos: %s", center_pos)
-                    break
-                end
+                center_pos = sub_points(pos_src, pos_bp)
+                printf("found bp center pos: %s", center_pos)
+                break
             end
         end
 
@@ -401,7 +499,6 @@ script.on_event(defines.events.on_player_cursor_stack_changed, function(event)
                 blueprint = {
                     tiles = item.get_blueprint_tiles() or {},
                     entities = item.get_blueprint_entities() or {},
-                    placed_at = event.position,
                 },
                 placeholders = { top_pos = {}, center_pos = {} },
             }
@@ -478,6 +575,7 @@ script.on_event(defines.events.on_put_item, function(event)
 
     printf("here we go")
     selection.state = item_state.placing
+    selection.blueprint.placed_at = event.position
     global.on_tick_registered = true
     script.on_event(defines.events.on_tick, on_tick)
 end)
@@ -583,53 +681,57 @@ function on_tick(event)
 
                 printf("blueprint rotation: %s", bp_rotation)
 
+                -- Find the blueprint build grid shift: https://forums.factorio.com/viewtopic.php?f=25&t=48383
+                local bp_grid_shift = 0
+                for _, bp_entity in pairs(blueprint.entities) do
+                    local prototype = game.entity_prototypes[bp_entity.name]
+                    local shift = prototype.building_grid_bit_shift
+                    if shift > bp_grid_shift then
+                        bp_grid_shift = shift
+                    end
+                end
+                local shift_val = 2^bp_grid_shift
+                local shift_offset = shift_val / 2
+                local shift_pos = { x = shift_offset, y = shift_offset }
+                local place_pos = {
+                    x = math.floor(math.floor(blueprint.placed_at.x) / shift_val) * shift_val,
+                    y = math.floor(math.floor(blueprint.placed_at.y) / shift_val) * shift_val,
+                }
+
                 -- Use blueprint entities to find out if there are colliding entities
                 -- at destination, then order their deconstruction
 
                 for _, bp_entity in pairs(blueprint.entities) do
                     -- Determine the collision area at the destination
-                    local zero = { x = 0, y = 0 }
-                    local coll_area = game.entity_prototypes[bp_entity.name].collision_box
                     local bp_ent_direction = bp_entity.direction or defines.direction.north
-                    local dest_pos, dest_dir = map_point(bp_entity.position, zero, bp_ent_direction,
-                                                         placeholders.center_pos, bp_rotation)
+                    local dest_pos, dest_dir = map_point(bp_entity.position, ZERO, bp_ent_direction,
+                                                         place_pos, bp_rotation)
 
+                    dest_pos = add_points(dest_pos, shift_pos)
                     printf("bp_entity: %s", bp_entity)
 
-                    printf("area: %s", coll_area)
-
-                    for edge, point in pairs(coll_area) do
-                        -- Apply original entity direction from blueprint
-                        point = rotate_point(point, zero, bp_ent_direction)
-
-                        -- Translate the box to the entity's center
-                        point = add_points(point, bp_entity.position)
-
-                        -- Map it to destination coordinates
-                        point = map_point(point, zero, bp_ent_direction,
-                                          placeholders.center_pos, bp_rotation)
-
-                        coll_area[edge] = point
-
-                    end
-
-                    -- Make sure the area edges are actually "left top" and "right bottom"
-                    -- since we may have rotated the area
-                    for _, var in pairs{'x', 'y'} do
-                        if coll_area.left_top[var] > coll_area.right_bottom[var] then
-                            coll_area.left_top[var], coll_area.right_bottom[var] = coll_area.right_bottom[var], coll_area.left_top[var]
+                    local coll_entities = {}
+                    local can_place = player.surface.can_place_entity{
+                        name = bp_entity.name,
+                        position = dest_pos,
+                        direction = dest_dir,
+                        force = player.force
+                    }
+                    if not can_place then
+                        local coll_area = bounding_box(player.force, player.surface, bp_entity.name, dest_pos, dest_dir)
+                        if coll_area then
+                            coll_entities = find_collisions(player.surface, coll_area)
                         end
                     end
-
-                    local coll_entities = find_collisions(player.surface, coll_area)
 
                     printf("#coll_entities: %d", #coll_entities)
 
                     local src_pos, src_entity
 
                     if source then
-                        src_pos = map_point(bp_entity.position, zero, bp_ent_direction,
+                        src_pos = map_point(bp_entity.position, ZERO, bp_ent_direction,
                                             source.center_pos, -bp_rotation)
+
                         src_entity = find_entity_or_ghost_at(player.surface, bp_entity.name, src_pos)
                     end
 
@@ -682,7 +784,7 @@ function on_tick(event)
                     force = player.force,
                     surface = player.surface,
                     direction = bp_rotation,
-                    position = selection.placeholders.center_pos,
+                    position = selection.blueprint.placed_at,
                     force_build = true, -- This won't cause any harm because we never get here if there was a conflict unless the player forced it with shift
                 }
 
@@ -709,7 +811,7 @@ function on_tick(event)
                     src_ent.position,
                     source.center_pos,
                     src_ent.direction,
-                    placeholders.center_pos,
+                    blueprint.placed_at,
                     bp_rotation
                 )
 
