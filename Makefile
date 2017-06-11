@@ -4,7 +4,7 @@ NAME=$(shell grep -Po '(?<="name": ")[^"]+(?=")' info.json)
 NAME_VER=$(NAME)_$(VERSION)
 ZIP=$(NAME_VER).zip
 
-FILES=$(wildcard README.md LICENSE info.json *.lua */)
+FILES=$(shell git ls-files HEAD)
 
 all: $(ZIP)
 

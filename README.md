@@ -4,6 +4,20 @@ Usage is similar to blueprints, except the tools are single-use (the blueprint
 will be converted back to a tool upon placing or when putting it back in
 inventory)
 
+## Features
+
+ - Quickly cut, copy and paste with single-use blueprints.
+
+ - Keep circuit connections with entities outside the selection when doing
+   cut & paste.
+
+ - Move containers (chests, turrets, ...) along with their contents.
+
+ - Pasting over existing entities deconstructs them if the blueprint is
+   force-placed.
+
+ - Compatible with instant blueprint mods like Creative Mode
+
 ## Cut tool
 
 The Cut tool allows you to select an area to be moved elsewhere.
@@ -75,16 +89,29 @@ source entities anymore and conflicting entities will always be deconstructed
 
 ## Changelog
 
+**0.1.4**
+
+ - Fixed crash when pasting rails (attempt to index local 'm' (a nil value)).
+
+ - Fixed crash when non-blueprintable entities like the item request proxy are
+   selected (table index is nil).
+
+ - Fixed non-blueprintable terrain tiles being marked deconstruction when
+   cutting them.
+
+ - Fixed inexact/invalid source/destination position computation
+
+
 **0.1.3**
 
-- When moving entities with inventories (chest, furnace, turret, etc.). their
-  items are now moved as well except for output slots and logistics requester
-  chests.
+ - When moving entities with inventories (chest, furnace, turret, etc.). their
+   items are now moved as well except for output slots and logistics requester
+   chests.
 
-- Conflicting entities at the destination will now copy settings and direction
-  from the source if they match the source entity instead of being
-  deconstructed.
+ - Conflicting entities at the destination will now copy settings and direction
+   from the source if they match the source entity instead of being
+   deconstructed.
 
-- Fixed mod not working in multiplayer for some players (#6)
+ - Fixed mod not working in multiplayer for some players (#6)
 
-- Fixed "LuaEntity API call when LuaEntity was invalid" crash (#5)
+ - Fixed "LuaEntity API call when LuaEntity was invalid" crash (#5)
