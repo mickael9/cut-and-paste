@@ -237,7 +237,7 @@ end
 
 -- Returns true if a table has any keys (not necessarily numeric)
 function has_keys(table)
-    for _, _ in pairs(table) do
+    for _, _ in pairs(table or {}) do
         return true
     end
     return false
