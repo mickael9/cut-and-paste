@@ -57,7 +57,7 @@ end
 function map_point(src_point, src_origin, src_direction,
                    dst_origin, rotation)
 
-    local src_direction = (src_direction or defines.direction.north) % 8
+    local src_direction = (src_direction or 0) % 8
     local rotation = (rotation or 0) % 8
     local dst_direction = (src_direction + rotation) % 8
     local dst_point
@@ -103,7 +103,7 @@ end
 -- If the direction is not a multiple of 90° (like 45° rails), then we return
 -- a bigger straight bounding box that contains the other one
 function bounding_box(force, surface, name, position, direction)
-    direction = (direction or defines.direction.north) % 8
+    direction = (direction or 0) % 8
 
     -- Just create a temporary ghost and read its bounding_box property
     local ent = surface.create_entity{
@@ -364,13 +364,12 @@ function on_selected_area(event)
             -- Filter out entites that can't be in a blueprint
             if not can_be_part_of_blueprint(match.prototype) then
                 entities[index] = nil
-            elseif match.name == ref_bp.name then
+            elseif not center_pos and match.name == ref_bp.name then
                 local pos_src = match.position
                 local pos_bp = ref_bp.position
 
                 center_pos = sub_points(pos_src, pos_bp)
                 printf("found bp center pos: %s", center_pos)
-                break
             end
         end
 
@@ -642,6 +641,7 @@ function on_tick(event)
             local blueprint = selection.blueprint
             local placeholders = selection.placeholders
             local bp_rotation
+            local bp_place_pos
 
             selection.state = item_state.placed
 
@@ -696,18 +696,13 @@ function on_tick(event)
                     end
                 end
 
-                local shift_pos, place_pos
-
                 if off_grid then
-                    shift_pos = ZERO
-                    place_pos = blueprint.placed_at
+                    bp_place_pos = blueprint.placed_at
                 else
                     local shift_val = 2^bp_grid_shift
-                    local shift_offset = shift_val / 2
-                    shift_pos = { x = shift_offset, y = shift_offset }
-                    place_pos = {
-                        x = math.floor(math.floor(blueprint.placed_at.x) / shift_val) * shift_val,
-                        y = math.floor(math.floor(blueprint.placed_at.y) / shift_val) * shift_val,
+                    bp_place_pos = {
+                        x = shift_val / 2 + math.floor(math.floor(blueprint.placed_at.x) / shift_val) * shift_val,
+                        y = shift_val / 2 + math.floor(math.floor(blueprint.placed_at.y) / shift_val) * shift_val,
                     }
                 end
 
@@ -716,11 +711,10 @@ function on_tick(event)
 
                 for _, bp_entity in pairs(blueprint.entities) do
                     -- Determine the collision area at the destination
-                    local bp_ent_direction = bp_entity.direction or defines.direction.north
+                    local bp_ent_direction = bp_entity.direction or 0
                     local dest_pos, dest_dir = map_point(bp_entity.position, ZERO, bp_ent_direction,
-                                                         place_pos, bp_rotation)
+                                                         bp_place_pos, bp_rotation)
 
-                    dest_pos = add_points(dest_pos, shift_pos)
                     printf("bp_entity: %s", bp_entity)
 
                     local coll_entities = {}
@@ -762,9 +756,13 @@ function on_tick(event)
 
                     if source then
                         src_pos = map_point(bp_entity.position, ZERO, bp_ent_direction,
-                                            source.center_pos, -bp_rotation)
+                                            source.center_pos, 0)
 
                         src_entity = find_entity_or_ghost_at(player.surface, bp_entity.name, src_pos)
+
+                        if not src_entity then
+                            printf("source entity %s not found at %s", bp_entity.name, src_pos)
+                        end
                     end
 
                     for _, coll_entity in pairs(coll_entities) do
@@ -843,11 +841,15 @@ function on_tick(event)
                     src_ent.position,
                     source.center_pos,
                     src_ent.direction,
-                    blueprint.placed_at,
+                    bp_place_pos,
                     bp_rotation
                 )
 
                 local dest_entity = find_entity_or_ghost_at(player.surface, src_ent.name, dest_pos)
+
+                if not dest_entity then
+                    printf("destination entity %s not found at %s", src_ent.name, dest_pos)
+                end
 
                 local reconnect_wires = get_setting(player, mod.setting_names.reconnect_wires)
                 if dest_entity and selection.cut and reconnect_wires then
