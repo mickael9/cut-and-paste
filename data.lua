@@ -1,5 +1,5 @@
 require('defines')
 require('prototypes/items')
+require('prototypes/entities')
 require('prototypes/recipes')
-require('prototypes/tiles')
 require('prototypes/input')

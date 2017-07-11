@@ -69,29 +69,17 @@ data:extend{
         selection_cursor_box_type = "not-allowed",
         alt_selection_cursor_box_type = "not-allowed"
     },
+
+    {
+        -- Not a real item, just needs to exist for the placeholder item to be able to be in a blueprint.
+
+        type = "item",
+        name = mod.placeholder,
+        icon = mod.dir .. "/graphics/icons/empty.png",
+        flags = {"hidden"},
+        order = "z",
+        place_result = mod.placeholder,
+        stack_size = 1,
+    },
 }
 
-local function make_placeholder_item(name)
-    data:extend{
-        {
-            -- Not a real item, just needs to exist for the tile
-            -- to be able to be in a blueprint.
-
-            type = "item",
-            name = name,
-            icon = mod.dir .. "/graphics/icons/empty.png",
-            flags = {"hidden"},
-            order = "a",
-            place_as_tile = {
-                result = name,
-                condition = { },
-                condition_size = 0,
-            },
-            stack_size = 1,
-        },
-
-    }
-end
-
-make_placeholder_item(mod.placeholders.top)
-make_placeholder_item(mod.placeholders.center)

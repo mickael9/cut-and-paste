@@ -3,6 +3,7 @@ mod = {}
 mod.name = 'cut-and-paste'
 mod.prefix = mod.name .. '-'
 mod.dir = '__' .. mod.name .. '__'
+mod.issue_tracker_url = 'https://github.com/mickael9/cut-and-paste/issues'
 
 mod.tools = {
     cut  = mod.prefix .. 'tool-cut',
@@ -13,9 +14,7 @@ mod.blueprints = {
     copy = mod.prefix .. 'blueprint-copy'
 }
 
-mod.placeholders = {
-    top    = mod.prefix .. 'placeholder-top',
-    center = mod.prefix .. 'placeholder-center',
+mod.placeholder = mod.prefix .. 'placeholder'
 
 mod.inputs = {
     switch_tool     = mod.prefix .. 'switch-tool',

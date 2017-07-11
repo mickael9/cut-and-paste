@@ -3,6 +3,13 @@ require('defines')
 
 local ZERO = { x = 0, y = 0 }
 
+function mod_error(player, message)
+    player.print(mod.name .. ": " ..  message)
+    player.print("Please report this issue at " .. mod.issue_tracker_url)
+
+    clear_selection(player)
+end
+
 function unwrap_ghost(ent)
     if not ent or not ent.valid then
         return { valid = false }
@@ -434,7 +441,7 @@ function on_selected_area(event)
             tiles = #blueprint_tiles > 0 and event.tiles or {},
         },
         blueprint = { tiles = blueprint_tiles, entities = blueprint_entities },
-        placeholders = { top_pos = {}, center_pos = {} },
+        placeholders = { },
     }
 end
 
@@ -491,7 +498,7 @@ script.on_event(defines.events.on_player_cursor_stack_changed, function(event)
                     tiles = item.get_blueprint_tiles() or {},
                     entities = item.get_blueprint_entities() or {},
                 },
-                placeholders = { top_pos = {}, center_pos = {} },
+                placeholders = { },
             }
         end
     end
@@ -540,7 +547,7 @@ script.on_event(defines.events.on_put_item, function(event)
 
     if #selection.blueprint.entities > 0 then
         -- Replace the blueprint being placed with a new one
-        -- containing only two dummy tiles at (0, 0) and (0, -1)
+        -- containing only two dummy entities at (0, 0) and (0, -1)
         --
         -- Their goal is to figure out which direction the blueprint is being
         -- placed because the game won't tell us otherwise.
@@ -548,20 +555,22 @@ script.on_event(defines.events.on_put_item, function(event)
         -- Once we've figured that out, we'll replace the blueprint again with
         -- the original one and apply it manually in the next tick
 
-        local tiles = {}
+        local ents = {}
 
-        table.insert(tiles, {
-            name = mod.placeholders.center,
+        table.insert(ents, {
+            name = mod.placeholder,
+            entity_number = 1,
             position = { x = 0, y = 0 }
         })
 
-        table.insert(tiles, {
-            name = mod.placeholders.top,
+        table.insert(ents, {
+            name = mod.placeholder,
+            entity_number = 2,
             position = { x = 0, y = -1 }
         })
 
-        item.set_blueprint_tiles(tiles)
-        item.set_blueprint_entities({})
+        item.set_blueprint_tiles({})
+        item.set_blueprint_entities(ents)
     end
 
     printf("here we go")
@@ -585,37 +594,28 @@ script.on_event(defines.events.on_built_entity, function(event)
         return
     end
 
-    if not selection or selection.state ~= item_state.placing then
+    if not selection or selection.state ~= item_state.placing or entity.type ~= 'entity-ghost' or entity.ghost_name ~= mod.placeholder then
         return
     end
 
-    if entity.type == 'tile-ghost' then
-        local original
-
-        if entity.ghost_name == mod.placeholders.center then
-            selection.placeholders.center_pos = {
-                x = entity.position.x,
-                y = entity.position.y
-            }
-            printf("center set: %s", entity.position)
-        elseif entity.ghost_name == mod.placeholders.top then
-            selection.placeholders.top_pos = {
-                x = entity.position.x,
-                y = entity.position.y
-            }
-            printf("top set: %s", entity.position)
-        else
-            return
-        end
-
-        entity.destroy()
+    -- center placeholder is always built first since it has a smaller unit number
+    if selection.placeholders.center_pos == nil then
+        selection.placeholders.center_pos = entity.position
+        printf("center set: %s", entity.position)
+    else
+        selection.placeholders.top_pos = entity.position
+        printf("top set: %s", entity.position)
     end
+
+    entity.destroy()
 end)
 
 function on_tick(event)
     printf("on_tick")
 
     for player_index, data in pairs(global.data) do
+        ::next::
+
         local player = game.players[player_index]
         local data = player_data(player)
         local selection = data.selection
@@ -637,7 +637,7 @@ function on_tick(event)
 
             selection.state = item_state.placed
 
-            -- Deconstruct the source entities and tiles  if the cut tool was used
+            -- Deconstruct the source entities and tiles if the cut tool was used
             if selection.cut then
                 for _, entity in pairs(selection.source.entities) do
                     deconstruct_entity(entity.original, player)
@@ -656,6 +656,11 @@ function on_tick(event)
                 end
             end
 
+            if #blueprint.entities > 0 and not (placeholders.top_pos and placeholders.center_pos) then
+                mod_error(player, "could not find placeholders")
+                goto next
+            end
+
             if #blueprint.entities > 0 then
                 printf("placeholders: %s", selection.placeholders)
 
@@ -670,6 +675,11 @@ function on_tick(event)
                 }
                 local tag = string.format("%d %d", rotation.x, rotation.y)
                 bp_rotation = direction_map[tag]
+
+                if not bp_rotation then
+                    mod_error(player, "could not determine blueprint rotation")
+                    goto next
+                end
 
                 printf("blueprint rotation: %s", bp_rotation)
 
@@ -887,6 +897,7 @@ function on_tick(event)
             else
                 printf("restarting copy")
                 selection.state = item_state.in_hand -- Restart from scratch
+                data.selection.placeholders = {}
             end
         else
             printf("there was no selection, %s", selection)
@@ -924,31 +935,45 @@ do
     end)
 end
 
+function clear_selection(player)
+    local stack = player.cursor_stack
+
+    if not stack.valid_for_read then
+        return
+    end
+
+    if stack.name == mod.blueprints.copy then
+        stack.set_stack(mod.tools.copy)
+    elseif stack.name == mod.blueprints.cut then
+        stack.set_stack(mod.tools.cut)
+    end
+
+    local data = player_data(player)
+    data.selection = nil
+end
+
+function switch_tool(player)
+    local stack = player.cursor_stack
+
+    if not stack.valid_for_read then
+        return
+    end
+
+    if stack.name == mod.tools.copy then
+        stack.set_stack(mod.tools.cut)
+    elseif stack.name == mod.tools.cut then
+        stack.set_stack(mod.tools.copy)
+    end
+end
+
 for _, input in pairs(mod.inputs) do
     script.on_event(input, function(event)
         local player = game.players[event.player_index]
-        local stack = player.cursor_stack
-        local data = player_data(player)
-
-        if not stack.valid_for_read then
-            return
-        end
 
         if input == mod.inputs.switch_tool then
-            if stack.name == mod.tools.copy then
-                stack.set_stack(mod.tools.cut)
-            elseif stack.name == mod.tools.cut then
-                stack.set_stack(mod.tools.copy)
-            end
+            switch_tool(player)
         elseif input == mod.inputs.clear_selection then
-            if stack.name == mod.blueprints.copy then
-                stack.set_stack(mod.tools.copy)
-            elseif stack.name == mod.blueprints.cut then
-                stack.set_stack(mod.tools.cut)
-            else
-                return
-            end
-            data.selection = nil
+            clear_selection(player)
         end
     end)
 end
