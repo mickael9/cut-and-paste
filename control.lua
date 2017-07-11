@@ -282,6 +282,7 @@ function on_selected_area(event)
     local entities = {}
     local cut = event.item == mod.tools.cut
     local paste_tool
+    local item_requests = {}
 
     -- Transform selector into a blueprint
     if cut then
@@ -345,6 +346,13 @@ function on_selected_area(event)
             match = unwrap_ghost(match)
             -- Filter out entites that can't be in a blueprint
             if not can_be_part_of_blueprint(match.prototype) then
+                if match.type == 'item-request-proxy' then
+                    local target = match.original.proxy_target
+                    if target and target.valid and target.unit_number then
+                        item_requests[target.unit_number] = match.original.item_requests
+                    end
+                end
+
                 entities[index] = nil
             elseif not center_pos and match.name == ref_bp.name then
                 local pos_src = match.position
@@ -366,6 +374,8 @@ function on_selected_area(event)
 
             if entity.type == 'entity-ghost' then
                 items = entity.item_requests or {}
+            elseif item_requests[entity.unit_number] then
+                items = item_requests[entity.unit_number]
             end
 
             if saved.type == 'logistic-container' then
