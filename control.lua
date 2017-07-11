@@ -924,6 +924,35 @@ do
     end)
 end
 
+for _, input in pairs(mod.inputs) do
+    script.on_event(input, function(event)
+        local player = game.players[event.player_index]
+        local stack = player.cursor_stack
+        local data = player_data(player)
+
+        if not stack.valid_for_read then
+            return
+        end
+
+        if input == mod.inputs.switch_tool then
+            if stack.name == mod.tools.copy then
+                stack.set_stack(mod.tools.cut)
+            elseif stack.name == mod.tools.cut then
+                stack.set_stack(mod.tools.copy)
+            end
+        elseif input == mod.inputs.clear_selection then
+            if stack.name == mod.blueprints.copy then
+                stack.set_stack(mod.tools.copy)
+            elseif stack.name == mod.blueprints.cut then
+                stack.set_stack(mod.tools.cut)
+            else
+                return
+            end
+            data.selection = nil
+        end
+    end)
+end
+
 script.on_load(function()
     if global.on_tick_registered then
         script.on_event(defines.events.on_tick, on_tick)

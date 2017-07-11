@@ -16,6 +16,10 @@ mod.blueprints = {
 mod.placeholders = {
     top    = mod.prefix .. 'placeholder-top',
     center = mod.prefix .. 'placeholder-center',
+
+mod.inputs = {
+    switch_tool     = mod.prefix .. 'switch-tool',
+    clear_selection = mod.prefix .. 'clear-selection',
 }
 
 mod.setting_names = {
