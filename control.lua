@@ -120,6 +120,7 @@ function bounding_box(force, surface, name, position, direction)
     end
 
     local area = ent.bounding_box
+    local secondary_area = ent.secondary_bounding_box
     ent.destroy()
 
     -- We also need to handle the case of oriented bounding boxes
@@ -128,27 +129,8 @@ function bounding_box(force, surface, name, position, direction)
 
     local vertices, center = obb_corners(area)
 
-    -- Curved rails have a second bounding box which isn't exposed (yet)
-    local prototype = game.entity_prototypes[name]
-
-    if prototype.type == 'curved-rail' then
-        local areas = {
-            [0] = { -245, -753, 87, 491, 0.91 },
-            [1] = { -87, -753, 245, 491, 0.09 },
-            [2] = { -35, -701, 297, 543, 0.16 },
-            [3] = { -35, -543, 297, 701, 0.34 },
-            [4] = { -87, -491, 245, 753, 0.41 },
-            [5] = { -245, -491, 87, 753, 0.59 },
-            [6] = { -297, -543, 35, 701, 0.66 },
-            [7] = { -297, -701, 35, 543, 0.84 },
-        }
-        local a = areas[direction]
-        local secondary_box = {
-            left_top     = add_points(position, { x = a[1] / 256, y = a[2] / 256 }),
-            right_bottom = add_points(position, { x = a[3] / 256, y = a[4] / 256 }),
-            orientation  = a[5]
-        }
-        local secondary_vertices = obb_corners(secondary_box)
+    if secondary_area then
+        local secondary_vertices = obb_corners(secondary_area)
         for _, v in pairs(secondary_vertices) do
             table.insert(vertices, v)
         end
