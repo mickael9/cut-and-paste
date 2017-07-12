@@ -246,6 +246,9 @@ function deconstruct_entity(entity, player)
     end
 
     if result then
+        -- Since Factorio 0.15.24, calling order_deconstruction will raise on_marked_for_deconstruction event
+        -- However, it will lack an associated player that Creative Mode needs for instant deconstruction so we still
+        -- need to raise it manually
         script.raise_event(defines.events.on_marked_for_deconstruction, {
             player_index = player.index,
             entity = entity,

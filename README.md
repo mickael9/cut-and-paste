@@ -4,19 +4,15 @@ Usage is similar to blueprints, except the tools are single-use (the blueprint
 will be converted back to a tool upon placing or when putting it back in
 inventory)
 
+![Demo](https://mods-data.factorio.com/pub_data/media_files/3k2gtIPhUmPm.gif)
+
 ## Features
 
  - Quickly cut, copy and paste with single-use blueprints.
-
- - Keep circuit connections with entities outside the selection when doing
-   cut & paste.
-
+ - Keep circuit connections with entities outside the selection when doing cut & paste.
  - Move containers (chests, turrets, ...) along with their contents.
-
- - Pasting over existing entities deconstructs them if the blueprint is
-   force-placed.
-
- - Compatible with instant blueprint mods like Creative Mode
+ - Pasting over existing entities deconstructs them if the blueprint is force-placed.
+ - Compatible with instant blueprint mods like Creative Mode.
 
 ## Cut tool
 
@@ -50,17 +46,9 @@ entities.
 
 This behavior can be changed using the "Replace mode" setting:
 
- - *When different*: conflicting destination entities will be deconstructed if
-   they have different type or if they can't be made to match the source (by
-   pasting settings and rotating them)
-
- - *Always*: conflicting destination entities will always be deconstructed,
-   even if they match exactly. Existing circuit connections will be kept if the
-   destination is of the same type and position, otherwise they'll be
-   destroyed.
-
- - *Never*: conflicting destination entities will not be replaced. This
-   matches the game behavior when placing a blueprint.
+ - *When different*: conflicting destination entities will be deconstructed if they have different type or if they can't be made to match the source (by pasting settings and rotating them)
+ - *Always*: conflicting destination entities will always be deconstructed, even if they match exactly. Existing circuit connections will be kept if the destination is of the same type and position, otherwise they'll be destroyed.
+ - *Never*: conflicting destination entities will not be replaced. This matches the game behavior when placing a blueprint.
 
 ## Copy tool
 
@@ -87,31 +75,31 @@ Note that once a copy blueprint leaves the hand, it won't be attached to the
 source entities anymore and conflicting entities will always be deconstructed
 (unless "Replace mode" was set to "Never").
 
+## Hotkeys
+
+ - "R": switch between the cut and copy tools (tool must be in hand with no current selection)
+ - "CONTROL + R": clear the current selection
+
 ## Changelog
+
+**0.1.5**
+
+ - Fixed crash when pasting on tile ghosts (#9)
+ - Fixed tile ghosts weren't deconstructed like normal tiles
+ - Added support for moving item request slots
+ - Added an hotkey to switch between cut and copy tools
+ - Added an hotkey to clear the selection
 
 **0.1.4**
 
  - Fixed crash when pasting rails (attempt to index local 'm' (a nil value)).
-
- - Fixed crash when non-blueprintable entities like the item request proxy are
-   selected (table index is nil).
-
- - Fixed non-blueprintable terrain tiles being marked deconstruction when
-   cutting them.
-
+ - Fixed crash when non-blueprintable entities like the item request proxy are selected (table index is nil).
+ - Fixed non-blueprintable terrain tiles being marked deconstruction when cutting them.
  - Fixed inexact/invalid source/destination position computation
-
 
 **0.1.3**
 
- - When moving entities with inventories (chest, furnace, turret, etc.). their
-   items are now moved as well except for output slots and logistics requester
-   chests.
-
- - Conflicting entities at the destination will now copy settings and direction
-   from the source if they match the source entity instead of being
-   deconstructed.
-
+ - When moving entities with inventories (chest, furnace, turret, etc.). their items are now moved as well except for output slots and logistics requester chests.
+ - Conflicting entities at the destination will now copy settings and direction from the source if they match the source entity instead of being deconstructed.
  - Fixed mod not working in multiplayer for some players (#6)
-
  - Fixed "LuaEntity API call when LuaEntity was invalid" crash (#5)

@@ -50,7 +50,7 @@ data:extend{
         selection_mode = {"cancel-deconstruct"},
         alt_selection_mode = {"cancel-deconstruct"},
         selection_cursor_box_type = "not-allowed",
-        alt_selection_cursor_box_type = "not-allowed"
+        alt_selection_cursor_box_type = "not-allowed",
     },
     {
         -- This blueprint type is used to contain the user's selection
@@ -67,7 +67,7 @@ data:extend{
         selection_mode = {"cancel-deconstruct"},
         alt_selection_mode = {"cancel-deconstruct"},
         selection_cursor_box_type = "not-allowed",
-        alt_selection_cursor_box_type = "not-allowed"
+        alt_selection_cursor_box_type = "not-allowed",
     },
 
     {

@@ -1,10 +1,10 @@
 {
 	"name": "cut-and-paste",
-	"version": "0.1.4",
+	"version": "0.1.5",
 	"title": "Cut and paste tools",
 	"author": "mickael9",
 	"homepage": "https://github.com/mickael9/cut-and-paste",
 	"description": "Quickly cut or copy an area and paste it where you want (single-use blueprints). External circuit connections are restored when possible.",
 	"factorio_version": "0.15",
-	"dependencies": ["base >= 0.15.12"]
+	"dependencies": ["base >= 0.15.28"]
 }
