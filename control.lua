@@ -287,6 +287,7 @@ function on_selected_area(event)
     local center_pos
     local saved_entities = {}
     local entities = {}
+    local tile_ghosts = {}
     local cut = event.item == mod.tools.cut
     local paste_tool
     local item_requests = {}
@@ -332,20 +333,29 @@ function on_selected_area(event)
         end
     end
 
+    if not point_equals(area.left_top, area.right_bottom) then
+        entities = player.surface.find_entities_filtered{
+            area = area,
+            force = player.force,
+        }
+    else
+        entities = player.surface.find_entities_filtered{
+            position = area.left_top,
+            force = player.force,
+        }
+    end
+
+    if #blueprint_tiles > 0 then
+        for index, match in pairs(entities) do
+            if match.type == 'tile-ghost' then
+                table.insert(tile_ghosts, match)
+                table.remove(entities, index)
+            end
+        end
+    end
+
     if #blueprint_entities > 0 then
         local ref_bp = blueprint_entities[1]
-
-        if not point_equals(area.left_top, area.right_bottom) then
-            entities = player.surface.find_entities_filtered{
-                area = area,
-                force = player.force,
-            }
-        else
-            entities = player.surface.find_entities_filtered{
-                position = area.left_top,
-                force = player.force,
-            }
-        end
 
         sort_by_position(entities)
 
@@ -439,6 +449,7 @@ function on_selected_area(event)
             center_pos = center_pos,
             entities = saved_entities,
             tiles = #blueprint_tiles > 0 and event.tiles or {},
+            tile_ghosts = tile_ghosts,
         },
         blueprint = { tiles = blueprint_tiles, entities = blueprint_entities },
         placeholders = { },
@@ -652,6 +663,10 @@ function on_tick(event)
                             force = player.force,
                         }
                         deconstruct_entity(entity, player)
+                    end
+
+                    for _, tile_ghost in pairs(selection.source.tile_ghosts or {}) do
+                        tile_ghost.destroy()
                     end
                 end
             end
