@@ -162,10 +162,14 @@ function bounding_box(force, surface, name, position, direction)
 end
 
 function find_collisions(surface, area)
-    local entities = surface.find_entities_filtered{
-        surface = surface,
-        area = area,
-    }
+    local arg = {surface = surface }
+    if ((area.left_top.x == area.right_bottom.x) and (area.left_top.y == area.right_bottom.y)) then
+        arg.position = area.left_top
+    else
+        arg.area = area
+    end
+    
+    local entities = surface.find_entities_filtered(arg)
     local collisions = {}
 
     for _, entity in pairs(entities or {}) do
@@ -176,7 +180,6 @@ function find_collisions(surface, area)
 
     return collisions
 end
-
 function add_points(...)
     res = { x = 0, y = 0 }
     for _, point in pairs{...} do
